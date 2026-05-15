@@ -27,7 +27,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export type AuthUser = { id: number; name: string; email: string; role: 'Admin'|'Manager'|'Analyst'; status: string; last_seen: string }
 export type Customer = { id: string; name: string; email: string; company: string; plan: 'Starter'|'Growth'|'Enterprise'; status: 'Active'|'Trial'|'At Risk'; mrr: number; last_contact: string; notes?: string }
 export type Contact = { id: number; name: string; email?: string; phone?: string; title?: string; customer_id: string }
-export type Deal = { id: string; company: string; customer_id?: string; stage: 'Discovery'|'Qualified'|'Proposal'|'Negotiation'|'Won'|'Lost'; owner: string; value: number; probability: number; lost_reason?: string, stage_updated_at: string }
+export type Deal = { id: string; company: string; customer_id?: string; stage: 'Discovery'|'Qualified'|'Proposal'|'Negotiation'|'Won'|'Lost'; owner: string; value: number; probability: number; lost_reason?: string, stage_updated_at: string, priority?: 'low' | 'medium' | 'high' }
 export type Bill = { id: string; vendor: string; category: 'Software'|'Services'|'Office'|'Ads'; amount: number; due_date: string; status: 'Paid'|'Pending'|'Overdue' }
 export type MonthlySeries = { month: string; revenue: number; cost: number; leads: number }
 export type Target = { id: number; name: string; current: number; goal: number; unit: 'USD'|'Leads'|'Deals'; quarter: string }
