@@ -25,6 +25,8 @@ export type Deal = {
   owner: string
   value: number
   probability: number
+  priority: string
+  stage_updated_at: string
 }
 
 export const dealsSeed: Deal[] = [
