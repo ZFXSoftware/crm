@@ -290,6 +290,33 @@ const MIGRATIONS: Migration[] = [
     },
   },
 
+  {
+     name: '004_add_status_to_deals',
+     up: (db) => {
+       db.exec(`ALTER TABLE deals ADD COLUMN priority TEXT DEFAULT 'medium'`)
+     },
+  },
+  {
+     name: '005_add_stageUpdatedAt_to_deals',
+     up: (db) => {
+       db.exec(`ALTER TABLE deals ADD COLUMN stage_updated_at TEXT`)
+     },
+  },
+  {
+  name: '006_create_deal_notes',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS deal_notes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          deal_id TEXT NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+          content TEXT NOT NULL,
+          created_by INTEGER REFERENCES auth_users(id),
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `)
+    },
+  },
+
   // ── Adicione futuras migrations aqui ──────────────────────
   // Exemplo:
   // {

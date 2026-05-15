@@ -11,6 +11,7 @@ import analyticsRouter from './routes/analytics'
 import adminRouter from './routes/admin'
 import financesRouter from './routes/finances'
 import insightsRouter from './routes/insights'
+import dealNotesRoutes from './routes/dealNotes'
 import tasksRouter from './routes/tasks'
 import { errorHandler, notFound } from './middleware/errorHandler'
 
@@ -40,6 +41,7 @@ app.use('/api/admin',     adminRouter)
 app.use('/api/finances',  financesRouter)
 app.use('/api/insights',  insightsRouter)
 app.use('/api',           tasksRouter)   // /api/tasks
+app.use('/api/deal-notes', dealNotesRoutes)
 
 app.use(notFound)
 app.use(errorHandler)

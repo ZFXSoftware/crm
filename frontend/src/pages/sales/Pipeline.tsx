@@ -4,10 +4,21 @@ import { Card, CardContent, CardHeader, CardSubtitle, CardTitle } from '../../co
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input, Modal } from '../../components/ui/Modal'
-import { dealsApi, adminApi, type Deal, type AuthUser } from '../../lib/api'
+import { dealsApi, dealNotesApi, adminApi, type Deal, type DealNote, type AuthUser } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
+import { cn } from '../../lib/cn'
 import { useT } from '../../lib/i18n'
-
+import { priorityClasses } from '../../lib/dealPriority'
+import {
+  DndContext,
+  closestCorners,
+  useDroppable,
+  useDraggable,
+} from '@dnd-kit/core'
+import {
+  daysInStage,
+  agingClasses,
+} from '../../lib/dealAging'
 const STAGES: Deal['stage'][] = ['Discovery', 'Qualified', 'Proposal', 'Negotiation', 'Won']
 const STAGE_PROBABILITY: Record<Deal['stage'], number> = {
   Discovery:25, Qualified:50, Proposal:65, Negotiation:78, Won:100, Lost:0,
@@ -21,20 +32,25 @@ const emptyForm = { company:'', owner:'', stage:'Discovery' as Deal['stage'], va
 type EditModal = { open: false } | { open: true; deal: Deal }
 
 export default function SalesPipeline() {
+  const [search, setSearch] = useState('')
+  const [expandedDeal, setExpandedDeal] = useState<Deal | null>(null)
   const { t } = useT()
   const p = t.pipeline
   const c = t.common
 
-  const [segment, setSegment]         = useState('all')
-  const [ownerFilter, setOwnerFilter] = useState('all')
-  const [view, setView]               = useState('board')
-  const [moving, setMoving]           = useState<string | null>(null)
-  const [addOpen, setAddOpen]         = useState(false)
-  const [addForm, setAddForm]         = useState(emptyForm)
-  const [saving, setSaving]           = useState(false)
-  const [editModal, setEditModal]     = useState<EditModal>({ open: false })
-  const [editForm, setEditForm]       = useState(emptyForm)
-  const [deleting, setDeleting]       = useState(false)
+  const [segment, setSegment]           = useState('all')
+  const [ownerFilter, setOwnerFilter]   = useState('all')
+  const [view, setView]                 = useState('board')
+  const [moving, setMoving]             = useState<string | null>(null)
+  const [addOpen, setAddOpen]           = useState(false)
+  const [addForm, setAddForm]           = useState(emptyForm)
+  const [saving, setSaving]             = useState(false)
+  const [editModal, setEditModal]       = useState<EditModal>({ open: false })
+  const [editForm, setEditForm]         = useState(emptyForm)
+  const [deleting, setDeleting]         = useState(false)
+  const [dealNotes, setDealNotes]       = useState<DealNote[]>([])
+  const [newNote, setNewNote]           = useState('')
+  const [loadingNotes, setLoadingNotes] = useState(false)
 
   const { data, loading, error, refetch } = useApi(() => dealsApi.list({ owner: ownerFilter }), [ownerFilter])
   const { data: usersData } = useApi(() => adminApi.users({ status: 'Active' }), [])
@@ -42,9 +58,24 @@ export default function SalesPipeline() {
   const deals = data ?? []
   const activeUsers: AuthUser[] = usersData ?? []
 
-  const filtered = useMemo(() =>
-    deals.filter(d => segment === 'all' ? true : d.value >= 20000),
-    [deals, segment])
+  const filtered = useMemo(() => {
+    return deals.filter(deal => {
+      const matchesSegment =
+        segment === 'all'
+          ? true
+          : deal.value >= 20000
+
+      const q = search.toLowerCase()
+
+      const matchesSearch =
+        !q ||
+        deal.company.toLowerCase().includes(q) ||
+        deal.owner.toLowerCase().includes(q) ||
+        deal.id.toLowerCase().includes(q)
+
+      return matchesSegment && matchesSearch
+    })
+  }, [deals, segment, search])
 
   const totals = useMemo(() => ({
     total:    filtered.reduce((s, d) => s + d.value, 0),
@@ -112,6 +143,93 @@ export default function SalesPipeline() {
     ...activeUsers.map(u => ({ label: u.name, value: u.name })),
   ]
 
+  function handleDragEnd(event: any) {
+    const { active, over } = event
+
+    if (!over) return
+
+    const dealId = active.id
+    const newStage = over.id
+
+    const deal = deals.find(d => d.id === dealId)
+
+    if (!deal || deal.stage === newStage) return
+
+    moveDealToStage(dealId, newStage)
+  }
+
+    async function moveDealToStage(
+      dealId: string,
+      stage: string
+    ) {
+      try {
+        setMoving(dealId)
+
+        await dealsApi.update(dealId, {
+          stage,
+          probability: STAGE_PROBABILITY[stage as Deal['stage']],
+        })
+
+        refetch()
+      } catch (err) {
+        console.error(err)
+      } finally {
+        setMoving(null)
+      }
+    }
+
+  function StageDropZone({
+    stage,
+    children,
+  }: {
+    stage: string
+    children: React.ReactNode
+  }) {
+    const { setNodeRef } = useDroppable({
+      id: stage,
+    })
+
+    return (
+      <div ref={setNodeRef} className="h-full">
+        {children}
+      </div>
+    )
+  }
+
+  function DraggableDeal({
+    deal,
+    children,
+  }: {
+    deal: Deal
+    children: React.ReactNode
+  }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+    } = useDraggable({
+      id: deal.id,
+    })
+
+    const style = transform
+      ? {
+          transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+        }
+      : undefined
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...listeners}
+        {...attributes}
+      >
+        {children}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -129,55 +247,328 @@ export default function SalesPipeline() {
           ]},
         ]}
         right={
-          <div className="flex items-center gap-2">
-            <Badge tone="blue">{c.total}: {money(totals.total)}</Badge>
-            <Badge tone="green">{p.weighted}: {money(Math.round(totals.weighted))}</Badge>
-            <Button onClick={openAdd}>{p.addDeal}</Button>
-          </div>
+            <div className="flex items-center gap-3">
+              <Input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search deals..."
+                className="w-64 bg-white"
+              />
+
+              <Badge tone="blue">
+                {c.total}: {money(totals.total)}
+              </Badge>
+
+              <Badge tone="green">
+                {p.weighted}: {money(Math.round(totals.weighted))}
+              </Badge>
+
+              <Button onClick={openAdd}>
+                {p.addDeal}
+              </Button>
+            </div>
         }
       />
 
       {error && <div className="rounded-card border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{c.backendError}</div>}
 
-      <div className="grid gap-4 lg:grid-cols-5">
-        {STAGES.map(stage => (
-          <Card key={stage} className="min-h-[520px]">
+      <DndContext
+        collisionDetection={closestCorners}
+        onDragEnd={handleDragEnd}
+      >
+      <div className="grid gap-4 grid auto-cols-[200px] grid-flow-col gap-4 overflow-x-auto">
+        {STAGES.map(stage => {
+          const stageDeals = filtered.filter(
+            d => d.stage === stage
+          )
+
+          const totalValue = stageDeals.reduce(
+            (sum, d) => sum + d.value,
+            0
+          )
+
+          const weightedValue = stageDeals.reduce(
+            (sum, d) =>
+              sum + d.value * (d.probability / 100),
+            0
+          )
+          return (
+          <StageDropZone stage={stage}>
+          <Card
+            key={stage}
+            className="min-h-[520px] border-slate-200 bg-slate-50/50"
+          >
             <CardHeader>
-              <CardTitle>{stage}</CardTitle>
-              <CardSubtitle>{filtered.filter(d => d.stage===stage).length} {p.deals}</CardSubtitle>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle>{stage}</CardTitle>
+
+                  <CardSubtitle>
+                    {stageDeals.length} {p.deals}
+                  </CardSubtitle>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">
+                    Pipeline
+                  </span>
+
+                  <span className="font-medium text-slate-700">
+                    {money(totalValue)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">
+                    {p.weighted}
+                  </span>
+
+                  <span className="font-medium text-slate-700">
+                    {money(weightedValue)}
+                  </span>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="max-h-[75vh] space-y-3">
               {loading
                 ? <div className="rounded-card border border-dashed border-border bg-slate-50 p-4 text-xs text-muted animate-pulse">{c.loading}</div>
-                : filtered.filter(d => d.stage===stage).map(deal => (
-                    <div key={deal.id} onClick={() => openEdit(deal)}
-                      className="cursor-pointer rounded-card border border-border bg-white p-4 transition hover:shadow-md hover:border-slate-300">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold">{deal.company}</div>
-                          <div className="mt-1 text-xs text-muted">{deal.id} · {deal.owner}</div>
-                        </div>
-                        <Badge tone={deal.stage==='Won'?'green':deal.stage==='Negotiation'?'purple':'gray'}>{deal.probability}%</Badge>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between">
-                        <div className="text-sm font-semibold">{money(deal.value)}</div>
-                        <div className="flex items-center gap-1">
-                          <Button size="sm" variant="ghost" className="border border-border bg-white"
-                            onClick={e => move(deal.id,-1,e)} disabled={deal.stage==='Discovery'||moving===deal.id} title={p.prevStage}>←</Button>
-                          <Button size="sm" variant="ghost" className="border border-border bg-white"
-                            onClick={e => move(deal.id,1,e)} disabled={deal.stage==='Won'||moving===deal.id} title={p.nextStage}>→</Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-              {!loading && filtered.filter(d => d.stage===stage).length===0 && (
+                : stageDeals.map(deal => {
+                    const aging = daysInStage(deal.stageUpdatedAt)
+                    return (
+                                    <DraggableDeal deal={deal}>
+                                      <div
+                                        key={deal.id}
+                                        onClick={() => openEdit(deal)}
+                                        onDoubleClick={async () => {
+                                          setExpandedDeal(deal)
+
+                                          setLoadingNotes(true)
+
+                                          try {
+                                            const notes = await dealNotesApi.list(deal.id)
+                                            setDealNotes(notes)
+                                          } finally {
+                                            setLoadingNotes(false)
+                                          }
+                                        }}
+                                        className={cn(
+                                          'cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-slate-300 hover:shadow-lg',
+                                          deal.priority === 'high' && 'ring-1 ring-red-200'
+                                        )}
+                                      >
+                                      <div className="space-y-4">
+                                        <div className="space-y-3">
+                                          <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0 flex-1">
+                                              <div className="line-clamp-2 text-sm font-semibold leading-5 text-slate-900">
+                                                {deal.company}
+                                              </div>
+                                            </div>
+
+                                            <div
+                                              className={cn(
+                                                'shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide',
+                                                priorityClasses(deal.priority)
+                                              )}
+                                            >
+                                              {deal.priority}
+                                            </div>
+                                          </div>
+
+                                          <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                                            <span>{deal.owner}</span>
+                                            <span>•</span>
+                                            <span>{deal.id}</span>
+                                          </div>
+                                        </div>
+                                        <div className="rounded-xl bg-slate-50 p-3">
+                                          <div className="text-xs text-slate-500">
+                                            Opportunity Value
+                                          </div>
+
+                                          <div className="mt-1 text-lg font-bold text-slate-900">
+                                            {money(deal.value)}
+                                          </div>
+
+                                          <div
+                                            className={cn(
+                                              'mt-2 text-xs font-medium',
+                                              agingClasses(aging)
+                                            )}
+                                          >
+                                            {aging} days in stage
+                                          </div>
+                                        </div>
+                                      </div>
+                                     
+                                    </div>
+                                     </DraggableDeal>
+                                  )})}
+              {!loading && stageDeals.length === 0 && (
                 <div className="rounded-card border border-dashed border-border bg-slate-50 p-4 text-xs text-muted">{p.noDealStage}</div>
               )}
             </CardContent>
           </Card>
-        ))}
+        </StageDropZone>
+        )})}
       </div>
+      </DndContext>
+      {expandedDeal && (
+        <div className="fixed inset-y-0 right-0 z-50 w-[420px] border-l border-slate-200 bg-white shadow-2xl flex flex-col">
 
+          {/* HEADER */}
+          <div className="flex items-center justify-between border-b border-slate-200 p-6 shrink-0">
+            <div>
+              <div className="text-lg font-bold">
+                {expandedDeal.company}
+              </div>
+
+              <div className="mt-1 text-sm text-slate-500">
+                {expandedDeal.id}
+              </div>
+            </div>
+
+            <Button
+              variant="ghost"
+              onClick={() => setExpandedDeal(null)}
+            >
+              ✕
+            </Button>
+          </div>
+
+          {/* BODY */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+            <div>
+              <div className="text-xs text-slate-500">
+                Owner
+              </div>
+
+              <div className="mt-1 font-medium">
+                {expandedDeal.owner}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs text-slate-500">
+                Value
+              </div>
+
+              <div className="mt-1 text-2xl font-bold">
+                {money(expandedDeal.value)}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs text-slate-500">
+                Stage
+              </div>
+
+              <div className="mt-1">
+                {expandedDeal.stage}
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 pt-6">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-900">
+                  Notes & Activity
+                </div>
+
+                <Badge tone="gray">
+                  {dealNotes.length}
+                </Badge>
+              </div>
+
+              <div className="space-y-3">
+                <textarea
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  placeholder="Write a note..."
+                  className="
+                    min-h-[120px]
+                    w-full
+                    rounded-2xl
+                    border
+                    border-slate-200
+                    p-4
+                    text-sm
+                    outline-none
+                    focus:border-slate-400
+                  "
+                />
+
+                <Button
+                  className="w-full"
+                  disabled={!newNote.trim()}
+                  onClick={async () => {
+                    if (!expandedDeal) return
+
+                    const created = await dealNotesApi.create(
+                      expandedDeal.id,
+                      {
+                        content: newNote,
+                      }
+                    )
+
+                    setDealNotes(prev => [
+                      created,
+                      ...prev,
+                    ])
+
+                    setNewNote('')
+                  }}
+                >
+                  Add Note
+                </Button>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                {loadingNotes && (
+                  <div className="text-sm text-slate-500">
+                    Loading notes...
+                  </div>
+                )}
+
+                {!loadingNotes && dealNotes.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+                    No notes yet
+                  </div>
+                )}
+
+                {dealNotes.map(note => (
+                  <div
+                    key={note.id}
+                    className="
+                      rounded-2xl
+                      border
+                      border-slate-200
+                      bg-slate-50
+                      p-4
+                    "
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium text-slate-900">
+                        {note.author || 'User'}
+                      </div>
+
+                      <div className="text-xs text-slate-500">
+                        {new Date(note.created_at).toLocaleString()}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
+                      {note.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Modal: Add Deal */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title={p.addDealTitle} subtitle={p.addDealSub}
         footer={<><Button variant="ghost" className="border border-border bg-white" onClick={() => setAddOpen(false)}>{c.cancel}</Button><Button onClick={addDeal} disabled={saving}>{saving ? c.saving : c.create}</Button></>}>
