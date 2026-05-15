@@ -96,7 +96,7 @@ export default function SalesPipeline() {
     if (!addForm.owner) return alert(`${p.ownerLabel} é obrigatório.`)
     setSaving(true)
     try {
-      await dealsApi.create({ company:addForm.company.trim(), owner:addForm.owner, stage:addForm.stage, value:Math.max(0,Number(addForm.value)||0), probability:Math.min(100,Math.max(0,Number(addForm.probability)||0)) })
+      await dealsApi.create({ company:addForm.company.trim(), owner:addForm.owner, stage:addForm.stage, value:Math.max(0,Number(addForm.value)||0), probability:Math.min(100,Math.max(0,Number(addForm.probability)||0)), stage_updated_at: new Date().toISOString() })
       refetch(); setAddOpen(false); setAddForm(emptyForm)
     } catch (e: any) { alert(e.message) }
     finally { setSaving(false) }
@@ -166,7 +166,7 @@ export default function SalesPipeline() {
         setMoving(dealId)
 
         await dealsApi.update(dealId, {
-          stage,
+          stage: addForm.stage as Deal['stage'],
           probability: STAGE_PROBABILITY[stage as Deal['stage']],
         })
 
@@ -335,7 +335,7 @@ export default function SalesPipeline() {
               {loading
                 ? <div className="rounded-card border border-dashed border-border bg-slate-50 p-4 text-xs text-muted animate-pulse">{c.loading}</div>
                 : stageDeals.map(deal => {
-                    const aging = daysInStage(deal.stageUpdatedAt)
+                    const aging = daysInStage(deal.stage_updated_at)
                     return (
                                     <DraggableDeal deal={deal}>
                                       <div
