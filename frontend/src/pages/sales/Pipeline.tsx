@@ -370,7 +370,7 @@ export default function SalesPipeline() {
                                             <div
                                               className={cn(
                                                 'shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide',
-                                                priorityClasses(deal.priority)
+                                                deal.priority ? priorityClasses(deal.priority) : priorityClasses('medium')
                                               )}
                                             >
                                               {deal.priority}

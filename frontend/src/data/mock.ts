@@ -28,12 +28,12 @@ export type Deal = {
 }
 
 export const dealsSeed: Deal[] = [
-  { id: 'D-221', company: 'Fabrikam', stage: 'Qualified', owner: 'Amelia', value: 14000, probability: 55, priority: 'high' },
-  { id: 'D-222', company: 'Contoso', stage: 'Discovery', owner: 'Noah', value: 6000, probability: 25, priority: 'medium' },
-  { id: 'D-223', company: 'Tailspin', stage: 'Proposal', owner: 'Sofia', value: 21000, probability: 65, priority: 'low' },
-  { id: 'D-224', company: 'Adventure Works', stage: 'Negotiation', owner: 'Liam', value: 32000, probability: 78, priority: 'high' },
-  { id: 'D-225', company: 'Wide World', stage: 'Qualified', owner: 'Ethan', value: 9000, probability: 50, priority: 'high' },
-  { id: 'D-226', company: 'Northwind', stage: 'Won', owner: 'Amelia', value: 45000, probability: 100, priority: 'low' },
+  { id: 'D-221', company: 'Fabrikam', stage: 'Qualified', owner: 'Amelia', value: 14000, probability: 55, priority: 'high', stage_updated_at: new Date().toISOString()},
+  { id: 'D-222', company: 'Contoso', stage: 'Discovery', owner: 'Noah', value: 6000, probability: 25, priority: 'medium', stage_updated_at: new Date().toISOString() },
+  { id: 'D-223', company: 'Tailspin', stage: 'Proposal', owner: 'Sofia', value: 21000, probability: 65, priority: 'low', stage_updated_at: new Date().toISOString() },
+  { id: 'D-224', company: 'Adventure Works', stage: 'Negotiation', owner: 'Liam', value: 32000, probability: 78, priority: 'high', stage_updated_at: new Date().toISOString() },
+  { id: 'D-225', company: 'Wide World', stage: 'Qualified', owner: 'Ethan', value: 9000, probability: 50, priority: 'high', stage_updated_at: new Date().toISOString() },
+  { id: 'D-226', company: 'Northwind', stage: 'Won', owner: 'Amelia', value: 45000, probability: 100, priority: 'low', stage_updated_at: new Date().toISOString() },
 ]
 
 export const monthlySeries = [
