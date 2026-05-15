@@ -50,10 +50,22 @@ router.patch('/:id', requirePermission('edit_sales'), (req: AuthRequest, res: Re
   const { stage, owner, value, probability, customer_id, lost_reason } = req.body
   const updates: string[] = []
   const params: Record<string, unknown> = { id: req.params.id }
+
   if (stage !== undefined) {
-    if (!STAGES.includes(stage)) return res.status(400).json({ error: 'Invalid stage' })
-    updates.push('stage = @stage'); params.stage = stage
-    if (probability === undefined) { updates.push('probability = @probability'); params.probability = STAGE_PROBABILITY[stage] }
+    if (!STAGES.includes(stage)) {
+      return res.status(400).json({ error: 'Invalid stage' })
+    }
+
+    updates.push('stage = @stage')
+    params.stage = stage
+
+    updates.push('stage_updated_at = @stage_updated_at')
+    params.stage_updated_at = new Date().toISOString()
+
+    if (probability === undefined) {
+      updates.push('probability = @probability')
+      params.probability = STAGE_PROBABILITY[stage]
+    }
   }
   if (owner !== undefined) { updates.push('owner = @owner'); params.owner = owner }
   if (value !== undefined) { updates.push('value = @value'); params.value = value }
@@ -61,6 +73,7 @@ router.patch('/:id', requirePermission('edit_sales'), (req: AuthRequest, res: Re
   if (customer_id !== undefined) { updates.push('customer_id = @customer_id'); params.customer_id = customer_id }
   if (lost_reason !== undefined) { updates.push('lost_reason = @lost_reason'); params.lost_reason = lost_reason }
   if (!updates.length) return res.status(400).json({ error: 'No fields to update' })
+
   db.prepare(`UPDATE deals SET ${updates.join(', ')} WHERE id = @id`).run(params)
   if (stage && stage !== existing.stage) {
     logActivity({ type: 'stage_change', entity_type: 'deal', entity_id: req.params.id, description: `Deal ${existing.company} moved ${existing.stage} → ${stage}`, metadata: { from: existing.stage, to: stage }, created_by: req.user!.id })
@@ -78,9 +91,10 @@ router.patch('/:id/move', requirePermission('edit_sales'), (req: AuthRequest, re
   const { direction } = req.body
   const idx = movable.indexOf(deal.stage)
   const nextIdx = direction === 'next' ? idx + 1 : idx - 1
+  const stageUpdatedAt = new Date().toISOString()
   if (nextIdx < 0 || nextIdx >= movable.length) return res.status(400).json({ error: 'Cannot move further' })
   const newStage = movable[nextIdx]
-  db.prepare('UPDATE deals SET stage = ?, probability = ? WHERE id = ?').run(newStage, STAGE_PROBABILITY[newStage], deal.id)
+  db.prepare('UPDATE deals SET stage = ?, probability = ?, stage_updated_at = ? WHERE id = ?').run(newStage, STAGE_PROBABILITY[newStage], stageUpdatedAt ,deal.id)
   logActivity({ type: 'stage_change', entity_type: 'deal', entity_id: deal.id, description: `Deal ${deal.company} moved ${deal.stage} → ${newStage}`, metadata: { from: deal.stage, to: newStage }, created_by: req.user!.id })
   res.json(db.prepare('SELECT * FROM deals WHERE id = ?').get(deal.id))
 })

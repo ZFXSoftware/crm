@@ -27,7 +27,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export type AuthUser = { id: number; name: string; email: string; role: 'Admin'|'Manager'|'Analyst'; status: string; last_seen: string }
 export type Customer = { id: string; name: string; email: string; company: string; plan: 'Starter'|'Growth'|'Enterprise'; status: 'Active'|'Trial'|'At Risk'; mrr: number; last_contact: string; notes?: string }
 export type Contact = { id: number; name: string; email?: string; phone?: string; title?: string; customer_id: string }
-export type Deal = { id: string; company: string; customer_id?: string; stage: 'Discovery'|'Qualified'|'Proposal'|'Negotiation'|'Won'|'Lost'; owner: string; value: number; probability: number; lost_reason?: string }
+export type Deal = { id: string; company: string; customer_id?: string; stage: 'Discovery'|'Qualified'|'Proposal'|'Negotiation'|'Won'|'Lost'; owner: string; value: number; probability: number; lost_reason?: string, stage_updated_at: string }
 export type Bill = { id: string; vendor: string; category: 'Software'|'Services'|'Office'|'Ads'; amount: number; due_date: string; status: 'Paid'|'Pending'|'Overdue' }
 export type MonthlySeries = { month: string; revenue: number; cost: number; leads: number }
 export type Target = { id: number; name: string; current: number; goal: number; unit: 'USD'|'Leads'|'Deals'; quarter: string }
@@ -85,6 +85,14 @@ export type DealsRevenueSummary = {
 export type Summary = { totalMrr: number; atRisk: number; openDeals: number; pipeline: number; wonDeals: number; winRate: number; avgTicket: number; overdueBills: number }
 export type PermissionMatrix = Record<string, Record<string, boolean>>
 export type Settings = Record<string, string>
+
+export type DealNote = {
+  id: number
+  deal_id: string
+  content: string
+  author?: string
+  created_at: string
+}
 
 // ── Auth ───────────────────────────────────────────────────
 export const authApi = {
@@ -234,4 +242,22 @@ export const financesApi = {
 export const insightsApi = {
   cards: () => request<InsightCard[]>('/api/insights/cards'),
   healthSeries: () => request<HealthPoint[]>('/api/insights/health-series'),
+}
+
+// ── DealNotes ──────────────────────────────────────────────
+export const dealNotesApi = {
+  list: (dealId: string) =>
+    request<DealNote[]>(`/api/deal-notes/${dealId}`),
+
+  create: (
+    dealId: string,
+    payload: { content: string }
+  ) =>
+    request<DealNote>(
+      `/api/deal-notes/${dealId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
 }
